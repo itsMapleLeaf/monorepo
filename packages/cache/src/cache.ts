@@ -152,22 +152,25 @@ export class RemixCache implements CustomCache {
     if (isOverflowing) {
       const cache = await this._openCache();
       const keys = await cache.keys();
-      const values = (await Promise.all(keys.map(key => cache.match(key)))) as Response[];
+      const values = await Promise.all(keys.map(key => cache.match(key)));
 
       const keyVal = keys.map((key, i) => ({ key, val: values[i] }));
 
       const comparableArrayPromise = keyVal.map(async val => {
-        const { metadata }: ResponseBody = await val.val.clone().json();
-
-        return {
-          metadata,
-          url: val.key.url,
-        };
+        const body = (await val.val?.clone().json()) as ResponseBody | undefined;
+        return body
+          ? {
+              metadata: body?.metadata,
+              url: val.key.url,
+            }
+          : undefined;
       });
 
       const comparableArray = await Promise.all(comparableArrayPromise);
 
-      const sortedArr = comparableArray.sort((a, b) => {
+      const isNonNil = <T>(value: T | undefined | null): value is T => value != null;
+
+      const sortedArr = comparableArray.filter(isNonNil).sort((a, b) => {
         return Number(a.metadata.accessedAt) - Number(b.metadata.accessedAt);
       });
 
